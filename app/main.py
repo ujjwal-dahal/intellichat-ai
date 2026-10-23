@@ -6,11 +6,12 @@ from app.graph.chat_graph import graph
 from langchain_core.messages import HumanMessage
 
 
-# UI ko lagi matra 
 from pathlib import Path
 
+
 #  UI SECTION  
-# Page configuration
+
+# Page configuration: Streamlit ko pahilo command yehi hunu parchha,
 st.set_page_config(
     page_title="IntelliChat AI",
     page_icon="✦",
@@ -46,7 +47,8 @@ def toggle_sidebar():
     st.session_state.sidebar_open = not st.session_state.sidebar_open
 
 
-# ---------- CSS ----------
+#  CSS 
+
 BASE_CSS = """
 <style>
 :root {
@@ -62,7 +64,7 @@ BASE_CSS = """
     --muted: #91A3C2;
 }
 
-/* ---------- Global ---------- */
+/* Global */
 html, body, [data-testid="stAppViewContainer"] {
     background: var(--bg) !important;
     color: var(--white) !important;
@@ -83,7 +85,7 @@ html, body, [data-testid="stAppViewContainer"] {
 [data-testid="stSidebarResizeHandle"],
 div[class*="ResizeHandle"] { display: none !important; }
 
-/* ---------- Sidebar ---------- */
+/* Sidebar */
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #081329 0%, #060E22 100%) !important;
     border-right: 1px solid var(--border);
@@ -151,7 +153,7 @@ div[class*="ResizeHandle"] { display: none !important; }
 .profile-name { color: var(--white); font-size: 13px; font-weight: 650; }
 .profile-plan { color: var(--muted); font-size: 11px; margin-top: 2px; }
 
-/* ---------- Main area ---------- */
+/* Main area */
 .main .block-container, [data-testid="stMainBlockContainer"] {
     max-width: 880px;
     padding-top: 40px;
@@ -172,31 +174,44 @@ div[class*="ResizeHandle"] { display: none !important; }
     margin: 16px auto 34px; max-width: 540px;
 }
 
-/* ---------- Chat bubbles ---------- */
+/* Chat bubbles (ChatGPT jasto) */
+/* Common: Streamlit ko default box hataune */
 [data-testid="stChatMessage"] {
-    background: #0A1730 !important;
-    border: 1px solid #15294A;
-    border-radius: 16px !important;
-    padding: 16px 18px !important;
-    margin-bottom: 14px;
-}
-/* User message: halka brand tint */
-[data-testid="stChatMessage"]:has([data-testid*="User"]) {
-    background: linear-gradient(135deg, rgba(38,184,252,.08), rgba(136,87,251,.08)) !important;
-    border-color: #1F3A66;
-}
-/* AI avatar: brand gradient, user avatar: halka panel */
-[data-testid="stChatMessageAvatarAssistant"],
-[data-testid="stChatMessageAvatarAI"] {
-    background: linear-gradient(135deg, #26B8FC, #5957FB 65%, #8857FB) !important;
-    color: #fff !important;
-}
-[data-testid="stChatMessageAvatarUser"] {
-    background: var(--panel-hover) !important;
-    color: var(--cyan) !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 6px 0 !important;
+    margin-bottom: 18px;
+    gap: 14px;
 }
 
-/* ---------- Chat input ---------- */
+/* AI message: LEFT ma, bubble chhaina, avatar/emoji pani chhaina (ChatGPT ko jastai) */
+[data-testid="stChatMessage"] p { line-height: 1.75; }
+
+/* USER message: RIGHT ma, rounded gradient bubble, avatar chhaina.
+   row-reverse + margin-left:auto le bubble lai dayan tira dhakelchha,
+   fit-content le bubble text jati matra chaude hunchha. */
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]),
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+    flex-direction: row-reverse;
+    width: fit-content;
+    max-width: 78%;
+    margin-left: auto;
+    padding: 12px 18px !important;
+    background: linear-gradient(135deg, rgba(38,184,252,.16), rgba(136,87,251,.16)) !important;
+    border: 1px solid #1F3A66 !important;
+    border-radius: 20px 20px 6px 20px !important;
+    text-align: left;
+}
+
+/* User ra AI dubai ko avatar (emoji/sticker/icon) lukaune, ChatGPT ma hudaina */
+[data-testid="stChatMessageAvatarUser"],
+[data-testid="chatAvatarIcon-user"],
+[data-testid="stChatMessageAvatarAssistant"],
+[data-testid="stChatMessageAvatarAI"],
+[data-testid="chatAvatarIcon-assistant"],
+[data-testid="chatAvatarIcon-ai"] { display: none !important; }
+
+/* Chat input */
 [data-testid="stBottom"], [data-testid="stBottom"] > div { background: var(--bg) !important; }
 [data-testid="stBottomBlockContainer"] { max-width: 880px; }
 
@@ -224,7 +239,7 @@ div[class*="ResizeHandle"] { display: none !important; }
     color: #fff !important; border-radius: 12px !important;
 }
 
-/* ---------- Mobile ---------- */
+/* Mobile */
 @media (max-width: 700px) {
     .main .block-container, [data-testid="stMainBlockContainer"] {
         padding: 24px 14px 120px;
@@ -390,8 +405,8 @@ with st.sidebar:
         )
 
 
+# Functionaly Code yaa cha
 
-#Functionality Logic ho yaa dekhi
 if "chats" not in st.session_state:
   
   #persistence
@@ -416,6 +431,7 @@ each_chat_msg_history = active_chat["messages"]
 
 # UI ONLY: chat khali hunda welcome screen dekhaune. st.empty() placeholder
 # use gareko, taki pahilo message pathaun bittikai tala ko line le hataidina sakos.
+
 welcome_placeholder = st.empty()
 if not each_chat_msg_history:
   with welcome_placeholder.container():
@@ -437,12 +453,10 @@ user_query = st.chat_input("Ask IntelliChat AI")
 if user_query:
   welcome_placeholder.empty()  # UI ONLY: message aayepachi welcome screen hataune
   
-  
   each_chat_msg_history.append({
   "role" : "user",
   "content" : user_query
   })
-  
   
   with st.chat_message(name="user"):
     st.write(user_query)
