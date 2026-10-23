@@ -1,10 +1,11 @@
 import streamlit as st 
 import uuid
+import time
 
 #backend import
 from app.graph.chat_graph import graph
 from langchain_core.messages import HumanMessage
-
+from app.helper.slow_stream import slow_stream_for_chunks
 
 from pathlib import Path
 
@@ -451,7 +452,7 @@ for msg in each_chat_msg_history:
 user_query = st.chat_input("Ask IntelliChat AI")
 
 if user_query:
-  welcome_placeholder.empty()  # UI ONLY: message aayepachi welcome screen hataune
+  # welcome_placeholder.empty()  # UI ONLY: message aayepachi welcome screen hataune
   
   each_chat_msg_history.append({
   "role" : "user",
@@ -461,19 +462,34 @@ if user_query:
   with st.chat_message(name="user"):
     st.write(user_query)
     
-  result = graph.invoke(
-    input={
-      "messages" : [HumanMessage(content=user_query)]
-    }, config=config
-  )
-
-  ai_answer = result["messages"][-1].content 
-
-  if ai_answer:
-    each_chat_msg_history.append({
-      "role" : "ai",
-      "content" : ai_answer
-    })
+  with st.chat_message("ai"):
     
-    with st.chat_message("ai"):
-      st.write(ai_answer)
+      # # Loading indicator ko lagi placeholder banaune
+      # #st.empty() euta place ma bhaeko content lai pachi replace garna milcha
+      
+      # loading = st.empty()
+      # loading.markdown("Thinking...")
+
+
+      # Graph bata streaming chunks line
+      stream_result = graph.stream(
+          {
+              "messages": [
+                HumanMessage(content=user_query)
+                ]
+          },
+          stream_mode="messages",
+          config=config
+      )
+
+
+      ai_answer = st.write_stream(
+        slow_stream_for_chunks(stream_result)
+      )
+
+      # Complete AI response history ma save garne
+      if ai_answer:
+          each_chat_msg_history.append({
+              "role": "ai",
+              "content": ai_answer
+          })
