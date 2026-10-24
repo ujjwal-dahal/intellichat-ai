@@ -1,13 +1,30 @@
 import streamlit as st 
 import uuid
-import time
 
 #backend import
 from app.graph.chat_graph import graph
 from langchain_core.messages import HumanMessage
 from app.helper.slow_stream import slow_stream_for_chunks
+from app.helper.ui_helper_function import create_new_chat, get_chat_title , select_chat, delete_chat
+from app.graph.chat_graph import checkpointer
 
 from pathlib import Path
+
+
+#start mai 
+if "chats" not in st.session_state:
+  #persistence
+  chat_id = str(uuid.uuid4())
+  
+  st.session_state["active_chat_id"] = chat_id
+  
+  st.session_state.chats = {}
+  
+  if chat_id not in st.session_state.chats:
+    st.session_state.chats[chat_id] = {
+        "title" : "New Conversation",
+        "messages" : []
+      }
 
 
 #  UI SECTION  
@@ -49,7 +66,6 @@ def toggle_sidebar():
 
 
 #  CSS 
-
 BASE_CSS = """
 <style>
 :root {
@@ -247,6 +263,38 @@ div[class*="ResizeHandle"] { display: none !important; }
     }
     .welcome-title { letter-spacing: -0.8px; margin-top: 50px; }
 }
+
+/* New Conversation button: gradient */
+[data-testid="stSidebar"] .st-key-new_chat button,
+[data-testid="stSidebar"] .st-key-rail_new button {
+    background: linear-gradient(135deg, #26B8FC, #5957FB 65%, #8857FB) !important;
+    color: #fff !important;
+    font-weight: 650 !important;
+    border: none !important;
+    box-shadow: 0 6px 20px rgba(89, 87, 251, .25);
+}
+[data-testid="stSidebar"] .st-key-new_chat button:hover,
+[data-testid="stSidebar"] .st-key-rail_new button:hover {
+    filter: brightness(1.1);
+    color: #fff !important;
+}
+
+/* Conversation list: title left ma, active chat highlight */
+[data-testid="stSidebar"] [class*="st-key-select_"] button,
+[data-testid="stSidebar"] [class*="st-key-active_select_"] button {
+    justify-content: flex-start !important;
+    text-align: left;
+    font-size: 13.5px;
+}
+[data-testid="stSidebar"] [class*="st-key-active_select_"] button {
+    background: var(--panel-hover) !important;
+    border-color: var(--border) !important;
+    color: var(--white) !important;
+}
+
+/* Delete (x) button: halka dekhaune, hover ma matra red */
+[data-testid="stSidebar"] [class*="st-key-delete_"] button { color: #5d6f8f !important; }
+[data-testid="stSidebar"] [class*="st-key-delete_"] button:hover { color: #ff6b6b !important; }
 </style>
 """
 
@@ -322,7 +370,6 @@ if not is_open:
 
 #  Sidebar (sabai static, chat logic sanga kehi sambandha chhaina) 
 with st.sidebar:
-
     if is_open:
         # Brand row: logo + name + collapse button ek linema
         logo_col, name_col, toggle_col = st.columns([1.1, 3.2, 1], vertical_alignment="center")
@@ -349,7 +396,68 @@ with st.sidebar:
                 help="Collapse sidebar",
                 on_click=toggle_sidebar,
             )
+        
+        # NEW CHAT ko lagi 
+        
+        st.button(
+          label="New Conversation",
+          icon=":material/add:",
+          use_container_width=True,
+          key="new_chat",
+          on_click=create_new_chat,
+        )
+        
+        st.markdown('<div class="sidebar-label">Recent conversations</div>', unsafe_allow_html=True)
+        
+        
+        # Scroll hune conversation list
+        history_container = st.container(height=260, border=False)
+        
+        with history_container:
+          
+          #sabai chats 
+          all_chats = st.session_state.get("chats",{})
+          
+          for chat_id, chat in reversed(
+            list(all_chats.items())
+          ):
+            chat_title = get_chat_title(chat)
+            
+            if chat_id == st.session_state["active_chat_id"]:
+              is_active = True
+            else:
+              is_active = False
+            
+            col_chat, col_delete = st.columns([5, 1], gap="small", vertical_alignment="center")
+            
+            with col_chat:
+              # Active chat ko key ma "active_" thapeko, CSS le highlight garna
+              
+              st.button(
+                  chat_title,
+                  
+                  icon=":material/chat_bubble:" if is_active else ":material/chat_bubble_outline:",
+                  
+                  key=f"{'active_' if is_active else ''}select_{chat_id}",
+                  
+                  use_container_width=True,
+                  help=chat_title,
+                  on_click=select_chat,
+                  args=(chat_id,),
+              )
+              
+            with col_delete:
+                st.button(
+                    ICON_ONLY,
+                    icon=":material/close:",
+                    key=f"delete_{chat_id}",
+                    help="Delete conversation",
+                    on_click=delete_chat,
+                    args=(chat_id,checkpointer),
+                )
 
+          
+          
         st.markdown('<div class="sidebar-label">About</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="info-card">{ABOUT_TEXT}</div>', unsafe_allow_html=True)
 
@@ -390,6 +498,15 @@ with st.sidebar:
             help="Expand sidebar",
             on_click=toggle_sidebar,
         )
+        
+        #collapse garesi "New Conversation" ko Symbol
+        st.button(
+          ICON_ONLY, 
+          icon=":material/add:", 
+          key="rail_new", 
+          help="New Conversation", 
+          on_click=create_new_chat
+          )
 
         # About: rail ma thau na hunale popover ma
         with st.popover(ICON_ONLY, icon=":material/info:", help="About IntelliChat AI"):
@@ -407,19 +524,6 @@ with st.sidebar:
 
 
 # Functionaly Code yaa cha
-
-if "chats" not in st.session_state:
-  
-  #persistence
-  chat_id = str(uuid.uuid4())
-  st.session_state["active_chat_id"] = chat_id
-  
-  st.session_state.chats = {}
-  
-  if chat_id not in st.session_state.chats:
-    st.session_state.chats[chat_id] = {
-        "messages" : []
-      }
   
 config = {
     "configurable" : {
@@ -427,7 +531,9 @@ config = {
     }
   }
 
+
 active_chat = st.session_state.chats[st.session_state["active_chat_id"]]
+
 each_chat_msg_history = active_chat["messages"]
 
 # UI ONLY: chat khali hunda welcome screen dekhaune. st.empty() placeholder
@@ -458,6 +564,7 @@ if user_query:
   "role" : "user",
   "content" : user_query
   })
+   
   
   with st.chat_message(name="user"):
     st.write(user_query)
