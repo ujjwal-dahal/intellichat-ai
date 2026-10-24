@@ -1,10 +1,10 @@
 from langgraph.graph import START, END , StateGraph
-from langgraph.checkpoint.memory import InMemorySaver
 
 from app.state.chat_state import ChatState
 from app.node.chat_node import chat_node
+from app.core.database import get_checkpointer
 
-checkpointer = InMemorySaver()
+checkpointer = get_checkpointer()
 
 builder = StateGraph(ChatState)
 

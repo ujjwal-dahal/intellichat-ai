@@ -1,6 +1,9 @@
 import streamlit as st
 import uuid
 
+#project imports
+from app.core.database import get_checkpointer
+from app.graph.chat_graph import graph
 
 def create_new_chat():
   """yo Helper Function le New Chat Banaucha Jaba User le New Conversation Click garcha"""
@@ -32,15 +35,22 @@ def create_new_chat():
 
 def get_chat_title(chat):
   
-  for msg in chat["messages"]:
-    if msg["role"] == "user":
-     chat_title = msg["content"]
-
+  for msg in chat.get("messages",[]):
     
-    if len(chat_title) < 35:
-      return chat_title
+    # LangGraph bata aayeko HumanMessage handle gareko
+    if getattr(msg, "type", None) == "human":
+      content = msg.content
     
-    return chat_title[:35]
+    # Purano dictionary format pani support gareko
+    elif isinstance(msg, dict) and msg.get("role") == "user":
+      content = msg.get("content", "")
+      
+    else:
+      continue
+ 
+    
+    if isinstance(content,str) :
+      return content.strip()[:35]
   
   else:
     return "New Conversation"
@@ -59,3 +69,36 @@ def delete_chat(chat_id, checkpointer):
     
     checkpointer.delete_thread(chat_id)
     
+    
+def get_all_chats():
+  checkpointer = get_checkpointer()
+  
+  #database ma save bhaeka Checkpoints list garne
+  checkpoints = list(checkpointer.list(None))
+  
+  all_chats = {}
+  
+  for checkpoint in checkpoints:
+    chat_id = checkpoint.config["configurable"]["thread_id"]
+    
+    if chat_id not in all_chats:
+      all_chats[chat_id] = {
+        
+      }
+    
+  for chat_id in all_chats:
+    
+    CONFIG = {
+      "configurable" : {
+        "thread_id" : chat_id
+      }
+    }
+    
+    state = graph.get_state(CONFIG)
+    
+    all_chats[chat_id] = {
+      "title" : "New Conversation",
+      "messages" : state.values.get("messages",[])
+    }
+  
+  return all_chats

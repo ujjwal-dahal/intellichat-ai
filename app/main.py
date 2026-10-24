@@ -5,26 +5,45 @@ import uuid
 from app.graph.chat_graph import graph
 from langchain_core.messages import HumanMessage
 from app.helper.slow_stream import slow_stream_for_chunks
-from app.helper.ui_helper_function import create_new_chat, get_chat_title , select_chat, delete_chat
+from app.helper.ui_helper_function import create_new_chat, get_chat_title , select_chat, delete_chat, get_all_chats
 from app.graph.chat_graph import checkpointer
 
 from pathlib import Path
 
 
 #start mai 
+
+#database bata sabai chats lyaune
+
 if "chats" not in st.session_state:
-  #persistence
-  chat_id = str(uuid.uuid4())
-  
-  st.session_state["active_chat_id"] = chat_id
-  
-  st.session_state.chats = {}
-  
-  if chat_id not in st.session_state.chats:
-    st.session_state.chats[chat_id] = {
-        "title" : "New Conversation",
-        "messages" : []
-      }
+    st.session_state.chats = get_all_chats()
+
+#get_all_chats() khali huda {} aaucha
+
+
+#active chat id assign garne
+
+#eddi active_chat_id chaina session_state ma bhane
+if "active_chat_id" not in st.session_state:
+    
+    #st.session_state.chats = {} huda False huncha
+    if st.session_state.chats :
+        
+        #get_all_chats() le sabbhanda naya chat pahila dincha, tesaile reversed() chaidaina
+        #next(iter(...)) le dictionary ko pahilo (sabbhanda naya) chat ko id dincha
+        st.session_state.active_chat_id = next(
+            iter(
+                st.session_state.chats
+            )
+        )
+    
+    else:
+        st.session_state.active_chat_id = None
+        
+#Chat select gareko chaina & database pani khali cha bhane
+if st.session_state.active_chat_id is None:
+    create_new_chat()
+
 
 
 #  UI SECTION  
@@ -416,11 +435,25 @@ with st.sidebar:
         with history_container:
           
           #sabai chats 
-          all_chats = st.session_state.get("chats",{})
+        #  all_chats = st.session_state.get("chats",{})
+        
+          #database bata aayeko chats (get_all_chats() le sabbhanda naya chat pahila dincha)
+          db_chats = get_all_chats()
           
-          for chat_id, chat in reversed(
-            list(all_chats.items())
-          ):
+          all_chats = {}
+          
+          #Naya khali chat (jasma message chhaina) database ma hudaina, 
+          #tesaile session_state bata liyera sabbhanda mathi rakhne
+          for chat_id, chat in reversed(list(st.session_state.chats.items())):
+              
+            if chat_id not in db_chats and not chat["messages"]:
+              all_chats[chat_id] = chat
+          
+          #tespachi database ko chats thapne
+          all_chats.update(db_chats)
+          
+          #all_chats pahilai naya-dekhi-purano order ma chha
+          for chat_id, chat in all_chats.items():
             chat_title = get_chat_title(chat)
             
             if chat_id == st.session_state["active_chat_id"]:
@@ -525,16 +558,31 @@ with st.sidebar:
 
 # Functionaly Code yaa cha
   
-config = {
+CONFIG = {
     "configurable" : {
       "thread_id" : st.session_state["active_chat_id"]
     }
   }
 
 
-active_chat = st.session_state.chats[st.session_state["active_chat_id"]]
+active_chat_id = st.session_state.get("active_chat_id")
+
+#active_chat_id None huna sakcha so 
+active_chat = (
+    st.session_state.chats.get(active_chat_id)
+    
+    if active_chat_id
+    else None
+)
+
+# Chat select nabhayeko awastha handle gareko
+if active_chat is None:
+    st.info("Select a conversation or create a new one.")
+    st.stop()
 
 each_chat_msg_history = active_chat["messages"]
+
+
 
 # UI ONLY: chat khali hunda welcome screen dekhaune. st.empty() placeholder
 # use gareko, taki pahilo message pathaun bittikai tala ko line le hataidina sakos.
@@ -545,14 +593,23 @@ if not each_chat_msg_history:
     st.markdown(WELCOME_HTML, unsafe_allow_html=True)
 
 
+# LangChain message objects ra purana dictionaries dubai render gareko
 for msg in each_chat_msg_history:
-  if msg["role"] == "user":
-    with st.chat_message("user"):
-      st.write(msg["content"])
-  
-  if msg["role"] == "ai":
-    with st.chat_message("ai"):
-      st.write(msg["content"])
+    
+    if isinstance(msg, dict):
+        role = msg.get("role")
+        content = msg.get("content", "")
+    else:
+        role = getattr(msg, "type", "")
+        content = getattr(msg, "content", "")
+
+    if role in ("user", "human"):
+        with st.chat_message("user"):
+            st.write(content)
+
+    elif role in ("ai", "assistant"):
+        with st.chat_message("assistant"):
+            st.write(content)
 
 
 user_query = st.chat_input("Ask IntelliChat AI")
@@ -586,7 +643,7 @@ if user_query:
                 ]
           },
           stream_mode="messages",
-          config=config
+          config=CONFIG
       )
 
 
@@ -600,3 +657,7 @@ if user_query:
               "role": "ai",
               "content": ai_answer
           })
+  
+  #Jawaf save bhayepachi page feri refresh garne, 
+  #taki sidebar ma chat ko title (pahilo message) turuntai dekhos
+  st.rerun()
