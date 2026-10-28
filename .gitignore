@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+#personal folders
+learn
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

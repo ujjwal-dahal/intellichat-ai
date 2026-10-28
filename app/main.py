@@ -561,7 +561,13 @@ with st.sidebar:
 CONFIG = {
     "configurable" : {
       "thread_id" : st.session_state["active_chat_id"]
-    }
+    },
+    
+    "metadata" : {
+        "thread_id" : st.session_state["active_chat_id"]
+    },
+    
+    "run_name" : "Chat Turn"
   }
 
 
