@@ -652,17 +652,17 @@ if user_query:
           config=CONFIG
       )
 
+      with st.spinner("Thinking..."):
+        ai_answer = st.write_stream(
+            slow_stream_for_chunks(stream_result)
+        )
 
-      ai_answer = st.write_stream(
-        slow_stream_for_chunks(stream_result)
-      )
-
-      # Complete AI response history ma save garne
-      if ai_answer:
-          each_chat_msg_history.append({
-              "role": "ai",
-              "content": ai_answer
-          })
+        # Complete AI response history ma save garne
+        if ai_answer:
+            each_chat_msg_history.append({
+                "role": "ai",
+                "content": ai_answer
+            })
   
   #Jawaf save bhayepachi page feri refresh garne, 
   #taki sidebar ma chat ko title (pahilo message) turuntai dekhos
