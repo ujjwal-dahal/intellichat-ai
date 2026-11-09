@@ -9,9 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-#personal folders
-learn
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -232,3 +229,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Ignored folders
+app/servers/
+app/tools/
+learn/

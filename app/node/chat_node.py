@@ -4,9 +4,12 @@ from app.state.chat_state import ChatState
 from app.core.config import setting
 
 #all tools
-from app.tools.weather_tool import weather_tool
-from app.tools.search_tool import tavily_search_tool
-from app.tools.calculator_tool import calculator_tool
+# from app.tools.weather_tool import weather_tool
+# from app.tools.search_tool import tavily_search_tool
+# from app.tools.calculator_tool import calculator_tool
+
+
+from app.helper.all_mcp_tools import get_all_mcp_tools
 
 
 SYSTEM_PROMPT = (
@@ -26,11 +29,8 @@ SYSTEM_PROMPT = (
 )
 
 
-ALL_TOOLS = [
-  weather_tool,
-  calculator_tool,
-  tavily_search_tool
-]
+ALL_TOOLS = get_all_mcp_tools()
+
 
 # llm = init_chat_model(
 #   model=setting.MODEL_NAME,
@@ -56,7 +56,7 @@ def chat_node(state : ChatState):
   
   chain = prompt | llm_with_tools
   
-  response = chain.invoke({
+  response =chain.invoke({
     "user_query" : user_input
   })
   

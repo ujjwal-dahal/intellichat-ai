@@ -1,5 +1,6 @@
 import time
 from langchain_core.messages import AIMessage
+import asyncio
 
 def slow_stream_for_chunks(stream_generator):
   for message_chunk , metadata in stream_generator:
