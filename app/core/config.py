@@ -10,7 +10,6 @@ class Setting():
   MODEL_PROVIDER = os.getenv("MODEL_PROVIDER")
   DATABASE_URL = os.getenv("DATABASE_URL")
   TAVILY_API_KEY=os.getenv("TAVILY_API_KEY")
-  EXPENSE_DATABASE_URL = os.getenv("EXPENSE_DATABASE_URL")
   
 
 setting = Setting()
