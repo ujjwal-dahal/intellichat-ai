@@ -1,52 +1,53 @@
-import streamlit as st 
+import streamlit as st
 import uuid
 
-#backend import
+# backend import
 from app.graph.chat_graph import graph
 from langchain_core.messages import HumanMessage
 from app.helper.slow_stream import slow_stream_for_chunks
-from app.helper.ui_helper_function import create_new_chat, get_chat_title , select_chat, delete_chat, get_all_chats
+from app.helper.ui_helper_function import (
+    create_new_chat,
+    get_chat_title,
+    select_chat,
+    delete_chat,
+    get_all_chats,
+)
 from app.graph.chat_graph import checkpointer
+from app.servers.rag_server import ingest_document
 
 from pathlib import Path
 
+# start mai
 
-#start mai 
-
-#database bata sabai chats lyaune
+# database bata sabai chats lyaune
 
 if "chats" not in st.session_state:
     st.session_state.chats = get_all_chats()
 
-#get_all_chats() khali huda {} aaucha
+# get_all_chats() khali huda {} aaucha
 
 
-#active chat id assign garne
+# active chat id assign garne
 
-#eddi active_chat_id chaina session_state ma bhane
+# eddi active_chat_id chaina session_state ma bhane
 if "active_chat_id" not in st.session_state:
-    
-    #st.session_state.chats = {} huda False huncha
-    if st.session_state.chats :
-        
-        #get_all_chats() le sabbhanda naya chat pahila dincha, tesaile reversed() chaidaina
-        #next(iter(...)) le dictionary ko pahilo (sabbhanda naya) chat ko id dincha
-        st.session_state.active_chat_id = next(
-            iter(
-                st.session_state.chats
-            )
-        )
-    
+
+    # st.session_state.chats = {} huda False huncha
+    if st.session_state.chats:
+
+        # get_all_chats() le sabbhanda naya chat pahila dincha, tesaile reversed() chaidaina
+        # next(iter(...)) le dictionary ko pahilo (sabbhanda naya) chat ko id dincha
+        st.session_state.active_chat_id = next(iter(st.session_state.chats))
+
     else:
         st.session_state.active_chat_id = None
-        
-#Chat select gareko chaina & database pani khali cha bhane
+
+# Chat select gareko chaina & database pani khali cha bhane
 if st.session_state.active_chat_id is None:
     create_new_chat()
 
 
-
-#  UI SECTION  
+#  UI SECTION
 
 # Page configuration: Streamlit ko pahilo command yehi hunu parchha,
 st.set_page_config(
@@ -57,7 +58,12 @@ st.set_page_config(
 )
 
 APP_NAME = "IntelliChat AI"
-LOGO_PATH = Path(__file__).parent / "app" / "image" / "intellichat_ai_logo.png"
+
+# main.py app/ bhitra chha bhane image folder yahi (app/image) ma hunchha,
+# natra project root bata app/image khojne (duitai case handle gareko)
+LOGO_PATH = Path(__file__).parent / "image" / "intellichat_ai_logo.png"
+if not LOGO_PATH.exists():
+    LOGO_PATH = Path(__file__).parent / "app" / "image" / "intellichat_ai_logo.png"
 
 # Sidebar ko duita width: khulda 290px, collapse hunda 70px (thin icon rail)
 SIDEBAR_OPEN_WIDTH = 290
@@ -78,13 +84,19 @@ ABOUT_TEXT = (
 if "sidebar_open" not in st.session_state:
     st.session_state.sidebar_open = True
 
+# Upload gareko documents: chat_id -> file names, ani ingest bhaisakeko file ids
+if "chat_docs" not in st.session_state:
+    st.session_state.chat_docs = {}
+if "ingested_file_ids" not in st.session_state:
+    st.session_state.ingested_file_ids = set()
+
 
 def toggle_sidebar():
     """Sidebar lai full <-> thin rail ma badalne."""
     st.session_state.sidebar_open = not st.session_state.sidebar_open
 
 
-#  CSS 
+#  CSS
 BASE_CSS = """
 <style>
 :root {
@@ -376,22 +388,69 @@ WELCOME_HTML = """
 </p>
 """
 
+# "+" button chat input ko left ma (sidebar width anusar position badlinchha)
+ATTACH_CSS = """
+<style>
+/* "+" ko lagi chat input ko left ma thau */
+[data-testid="stBottomBlockContainer"] { padding-left: 64px !important; }
+
+.st-key-attach_menu {
+    position: fixed;
+    bottom: 22px;
+    left: calc(max(__W__px, (__W__px + 100vw) / 2 - 440px) + 12px);
+    width: auto !important;
+    z-index: 1000;
+}
+.st-key-attach_menu [data-testid="stPopover"] { width: auto !important; }
+.st-key-attach_menu button {
+    width: 44px !important; min-width: 44px !important;
+    height: 44px !important; min-height: 44px !important;
+    padding: 0 !important; gap: 0 !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    background: var(--panel) !important;
+    border: 1px solid #263D62 !important;
+    color: var(--muted) !important;
+}
+.st-key-attach_menu button:hover {
+    color: var(--cyan) !important;
+    border-color: var(--cyan) !important;
+}
+/* Popover ko chevron lukaune, "+" matra dekhaune */
+.st-key-attach_menu [data-testid="stPopover"] button > *:last-child:not(:first-child),
+.st-key-attach_menu [data-testid="stPopover"] button svg:last-of-type:not(:first-of-type) {
+    display: none !important;
+}
+</style>
+"""
+
 st.markdown(BASE_CSS, unsafe_allow_html=True)
 
 is_open = st.session_state.sidebar_open
 st.markdown(
-    WIDTH_CSS.replace("__W__", str(SIDEBAR_OPEN_WIDTH if is_open else SIDEBAR_RAIL_WIDTH)),
+    WIDTH_CSS.replace(
+        "__W__", str(SIDEBAR_OPEN_WIDTH if is_open else SIDEBAR_RAIL_WIDTH)
+    ),
     unsafe_allow_html=True,
 )
 if not is_open:
     st.markdown(RAIL_CSS, unsafe_allow_html=True)
 
+st.markdown(
+    ATTACH_CSS.replace(
+        "__W__", str(SIDEBAR_OPEN_WIDTH if is_open else SIDEBAR_RAIL_WIDTH)
+    ),
+    unsafe_allow_html=True,
+)
 
-#  Sidebar (sabai static, chat logic sanga kehi sambandha chhaina) 
+
+#  Sidebar (sabai static, chat logic sanga kehi sambandha chhaina)
 with st.sidebar:
     if is_open:
         # Brand row: logo + name + collapse button ek linema
-        logo_col, name_col, toggle_col = st.columns([1.1, 3.2, 1], vertical_alignment="center")
+        logo_col, name_col, toggle_col = st.columns(
+            [1.1, 3.2, 1], vertical_alignment="center"
+        )
 
         with logo_col:
             if LOGO_PATH.exists():
@@ -415,87 +474,95 @@ with st.sidebar:
                 help="Collapse sidebar",
                 on_click=toggle_sidebar,
             )
-        
-        # NEW CHAT ko lagi 
-        
+
+        # NEW CHAT ko lagi
+
         st.button(
-          label="New Conversation",
-          icon=":material/add:",
-          use_container_width=True,
-          key="new_chat",
-          on_click=create_new_chat,
+            label="New Conversation",
+            icon=":material/add:",
+            use_container_width=True,
+            key="new_chat",
+            on_click=create_new_chat,
         )
-        
-        st.markdown('<div class="sidebar-label">Recent conversations</div>', unsafe_allow_html=True)
-        
-        
+
+        st.markdown(
+            '<div class="sidebar-label">Recent conversations</div>',
+            unsafe_allow_html=True,
+        )
+
         # Scroll hune conversation list
         history_container = st.container(height=260, border=False)
-        
+
         with history_container:
-          
-          #sabai chats 
-        #  all_chats = st.session_state.get("chats",{})
-        
-          #database bata aayeko chats (get_all_chats() le sabbhanda naya chat pahila dincha)
-          db_chats = get_all_chats()
-          
-          all_chats = {}
-          
-          #Naya khali chat (jasma message chhaina) database ma hudaina, 
-          #tesaile session_state bata liyera sabbhanda mathi rakhne
-          for chat_id, chat in reversed(list(st.session_state.chats.items())):
-              
-            if chat_id not in db_chats and not chat["messages"]:
-              all_chats[chat_id] = chat
-          
-          #tespachi database ko chats thapne
-          all_chats.update(db_chats)
-          
-          #all_chats pahilai naya-dekhi-purano order ma chha
-          for chat_id, chat in all_chats.items():
-            chat_title = get_chat_title(chat)
-            
-            if chat_id == st.session_state["active_chat_id"]:
-              is_active = True
-            else:
-              is_active = False
-            
-            col_chat, col_delete = st.columns([5, 1], gap="small", vertical_alignment="center")
-            
-            with col_chat:
-              # Active chat ko key ma "active_" thapeko, CSS le highlight garna
-              
-              st.button(
-                  chat_title,
-                  
-                  icon=":material/chat_bubble:" if is_active else ":material/chat_bubble_outline:",
-                  
-                  key=f"{'active_' if is_active else ''}select_{chat_id}",
-                  
-                  use_container_width=True,
-                  help=chat_title,
-                  on_click=select_chat,
-                  args=(chat_id,),
-              )
-              
-            with col_delete:
-                st.button(
-                    ICON_ONLY,
-                    icon=":material/close:",
-                    key=f"delete_{chat_id}",
-                    help="Delete conversation",
-                    on_click=delete_chat,
-                    args=(chat_id,checkpointer),
+
+            # sabai chats
+            #  all_chats = st.session_state.get("chats",{})
+
+            # database bata aayeko chats (get_all_chats() le sabbhanda naya chat pahila dincha)
+            db_chats = get_all_chats()
+
+            all_chats = {}
+
+            # Naya khali chat (jasma message chhaina) database ma hudaina,
+            # tesaile session_state bata liyera sabbhanda mathi rakhne
+            for chat_id, chat in reversed(list(st.session_state.chats.items())):
+
+                if chat_id not in db_chats and not chat["messages"]:
+                    all_chats[chat_id] = chat
+
+            # tespachi database ko chats thapne
+            all_chats.update(db_chats)
+
+            # all_chats pahilai naya-dekhi-purano order ma chha
+            for chat_id, chat in all_chats.items():
+                chat_title = get_chat_title(chat)
+
+                if chat_id == st.session_state["active_chat_id"]:
+                    is_active = True
+                else:
+                    is_active = False
+
+                col_chat, col_delete = st.columns(
+                    [5, 1], gap="small", vertical_alignment="center"
                 )
 
-          
-          
+                with col_chat:
+                    # Active chat ko key ma "active_" thapeko, CSS le highlight garna
+
+                    st.button(
+                        chat_title,
+                        icon=(
+                            ":material/chat_bubble:"
+                            if is_active
+                            else ":material/chat_bubble_outline:"
+                        ),
+                        key=f"{'active_' if is_active else ''}select_{chat_id}",
+                        use_container_width=True,
+                        help=chat_title,
+                        on_click=select_chat,
+                        args=(chat_id,),
+                    )
+
+                with col_delete:
+                    st.button(
+                        ICON_ONLY,
+                        icon=":material/close:",
+                        key=f"delete_{chat_id}",
+                        help="Delete conversation",
+                        on_click=delete_chat,
+                        args=(chat_id, checkpointer),
+                    )
+
         st.markdown('<div class="sidebar-label">About</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="info-card">{ABOUT_TEXT}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="info-card">{ABOUT_TEXT}</div>', unsafe_allow_html=True
+        )
 
         # Profile card lai tala dhakelna spacer (screen height anusar)
-        st.markdown('<div style="height:max(0px, calc(100vh - 520px))"></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="height:max(0px, calc(100vh - 520px))"></div>',
+            unsafe_allow_html=True,
+        )
 
         st.markdown(
             """
@@ -531,22 +598,25 @@ with st.sidebar:
             help="Expand sidebar",
             on_click=toggle_sidebar,
         )
-        
-        #collapse garesi "New Conversation" ko Symbol
+
+        # collapse garesi "New Conversation" ko Symbol
         st.button(
-          ICON_ONLY, 
-          icon=":material/add:", 
-          key="rail_new", 
-          help="New Conversation", 
-          on_click=create_new_chat
-          )
+            ICON_ONLY,
+            icon=":material/add:",
+            key="rail_new",
+            help="New Conversation",
+            on_click=create_new_chat,
+        )
 
         # About: rail ma thau na hunale popover ma
         with st.popover(ICON_ONLY, icon=":material/info:", help="About IntelliChat AI"):
             st.markdown(f"**{APP_NAME}**")
             st.caption(ABOUT_TEXT)
 
-        st.markdown('<div style="height:max(0px, calc(100vh - 400px))"></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="height:max(0px, calc(100vh - 400px))"></div>',
+            unsafe_allow_html=True,
+        )
 
         st.markdown(
             '<div class="sidebar-footer"><div class="profile-card" '
@@ -557,29 +627,24 @@ with st.sidebar:
 
 
 # Functionaly Code yaa cha
-  
+
+# active_docs: yo chat ma upload gareko documents ko naam, chat_node le system prompt ma jodcha
 CONFIG = {
-    "configurable" : {
-      "thread_id" : st.session_state["active_chat_id"]
+    "configurable": {
+        "thread_id": st.session_state["active_chat_id"],
+        "active_docs": st.session_state.chat_docs.get(
+            st.session_state["active_chat_id"], []
+        ),
     },
-    
-    "metadata" : {
-        "thread_id" : st.session_state["active_chat_id"]
-    },
-    
-    "run_name" : "Chat Turn"
-  }
+    "metadata": {"thread_id": st.session_state["active_chat_id"]},
+    "run_name": "Chat Turn",
+}
 
 
 active_chat_id = st.session_state.get("active_chat_id")
 
-#active_chat_id None huna sakcha so 
-active_chat = (
-    st.session_state.chats.get(active_chat_id)
-    
-    if active_chat_id
-    else None
-)
+# active_chat_id None huna sakcha so
+active_chat = st.session_state.chats.get(active_chat_id) if active_chat_id else None
 
 # Chat select nabhayeko awastha handle gareko
 if active_chat is None:
@@ -589,19 +654,18 @@ if active_chat is None:
 each_chat_msg_history = active_chat["messages"]
 
 
-
 # UI ONLY: chat khali hunda welcome screen dekhaune. st.empty() placeholder
 # use gareko, taki pahilo message pathaun bittikai tala ko line le hataidina sakos.
 
 welcome_placeholder = st.empty()
 if not each_chat_msg_history:
-  with welcome_placeholder.container():
-    st.markdown(WELCOME_HTML, unsafe_allow_html=True)
+    with welcome_placeholder.container():
+        st.markdown(WELCOME_HTML, unsafe_allow_html=True)
 
 
 # LangChain message objects ra purana dictionaries dubai render gareko
 for msg in each_chat_msg_history:
-    
+
     if isinstance(msg, dict):
         role = msg.get("role")
         content = msg.get("content", "")
@@ -618,52 +682,70 @@ for msg in each_chat_msg_history:
             st.write(content)
 
 
+# "+" menu: document upload (PDF / TXT) -> Qdrant ma ingest -> rag tool le use garcha
+docs_for_chat = st.session_state.chat_docs.setdefault(active_chat_id, [])
+
+with st.container(key="attach_menu"):
+    with st.popover(ICON_ONLY, icon=":material/add:", help="Add to chat"):
+        st.markdown("**Add to chat**")
+        uploaded_file = st.file_uploader(
+            "Upload document",
+            type=["pdf", "txt"],
+            key=f"doc_uploader_{active_chat_id}",
+        )
+
+        if (
+            uploaded_file is not None
+            and uploaded_file.file_id not in st.session_state.ingested_file_ids
+        ):
+            with st.spinner("Processing document..."):
+                try:
+                    chunk_count = ingest_document(
+                        file_bytes=uploaded_file.getvalue(),
+                        file_name=uploaded_file.name,
+                    )
+                    st.session_state.ingested_file_ids.add(uploaded_file.file_id)
+                    docs_for_chat.append(uploaded_file.name)
+                    st.success(f"{uploaded_file.name} ready ({chunk_count} chunks)")
+                except Exception as e:
+                    st.error(f"Upload failed: {e}")
+
+if docs_for_chat:
+    st.caption("📎 " + ", ".join(docs_for_chat))
+
+
 user_query = st.chat_input("Ask IntelliChat AI")
 
 if user_query:
-  # welcome_placeholder.empty()  # UI ONLY: message aayepachi welcome screen hataune
-  
-  each_chat_msg_history.append({
-  "role" : "user",
-  "content" : user_query
-  })
-   
-  
-  with st.chat_message(name="user"):
-    st.write(user_query)
-    
-  with st.chat_message("ai"):
-    
-      # # Loading indicator ko lagi placeholder banaune
-      # #st.empty() euta place ma bhaeko content lai pachi replace garna milcha
-      
-      # loading = st.empty()
-      # loading.markdown("Thinking...")
+    # welcome_placeholder.empty()  # UI ONLY: message aayepachi welcome screen hataune
 
+    each_chat_msg_history.append({"role": "user", "content": user_query})
 
-      # Graph bata streaming chunks line
-      stream_result = graph.stream(
-          {
-              "messages": [
-                HumanMessage(content=user_query)
-                ]
-          },
-          stream_mode="messages",
-          config=CONFIG
-      )
+    with st.chat_message(name="user"):
+        st.write(user_query)
 
-      with st.spinner("Thinking..."):
-        ai_answer = st.write_stream(
-            slow_stream_for_chunks(stream_result)
+    with st.chat_message("ai"):
+
+        # # Loading indicator ko lagi placeholder banaune
+        # #st.empty() euta place ma bhaeko content lai pachi replace garna milcha
+
+        # loading = st.empty()
+        # loading.markdown("Thinking...")
+
+        # Graph bata streaming chunks line
+        stream_result = graph.stream(
+            {"messages": [HumanMessage(content=user_query)]},
+            stream_mode="messages",
+            config=CONFIG,
         )
 
-        # Complete AI response history ma save garne
-        if ai_answer:
-            each_chat_msg_history.append({
-                "role": "ai",
-                "content": ai_answer
-            })
-  
-  #Jawaf save bhayepachi page feri refresh garne, 
-  #taki sidebar ma chat ko title (pahilo message) turuntai dekhos
-  st.rerun()
+        with st.spinner("Thinking..."):
+            ai_answer = st.write_stream(slow_stream_for_chunks(stream_result))
+
+            # Complete AI response history ma save garne
+            if ai_answer:
+                each_chat_msg_history.append({"role": "ai", "content": ai_answer})
+
+    # Jawaf save bhayepachi page feri refresh garne,
+    # taki sidebar ma chat ko title (pahilo message) turuntai dekhos
+    st.rerun()
